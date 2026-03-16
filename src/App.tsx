@@ -4,12 +4,8 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Upload, Download, Image as ImageIcon, Loader2, Sparkles, RefreshCw, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-// Initialize Gemini API
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export default function App() {
   const [image, setImage] = useState<string | null>(null);
@@ -45,41 +41,29 @@ export default function App() {
     setError(null);
 
     try {
-      const base64Data = image.split(',')[1];
       const thicknessDesc = getThicknessDescription(thickness);
       
-      const response = await genAI.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: 'image/png',
-              },
-            },
-            {
-              text: `Transform this image into a clean, high-contrast coloring book page. Use only solid black outlines on a pure white background. Use ${thicknessDesc}. Remove all shading, textures, colors, and gradients. Keep only the essential structural lines. The output should be a single image part.`,
-            },
-          ],
+      const response = await fetch('/api/convert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          image,
+          thicknessDesc,
+        }),
       });
 
-      let foundImage = false;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          setResult(`data:image/png;base64,${part.inlineData.data}`);
-          foundImage = true;
-          break;
-        }
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to convert image');
       }
 
-      if (!foundImage) {
-        throw new Error('AI did not return an image. Please try again.');
-      }
-    } catch (err) {
+      setResult(data.result);
+    } catch (err: any) {
       console.error(err);
-      setError('Failed to convert image. Please try a different photo or check your connection.');
+      setError(err.message || 'Failed to convert image. Please try a different photo or check your connection.');
     } finally {
       setLoading(false);
     }
